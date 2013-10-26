@@ -18,7 +18,7 @@ QRcode markdown filter
 import markdown
 import StringIO
 from QrCodeLib import *
-from markdown import etree
+from markdown.util import etree
 from base64 import b64encode
 
 class QrCodeExtension(markdown.Extension):
@@ -33,7 +33,6 @@ class QrCodeExtension(markdown.Extension):
     # Set extension defaults
     self.config = {
       "intPixelSize"  : [  2, "Pixel Size of each dark and light bit" ],
-      "intCanvasSize" : [ 10, "Canvas Size of the QRCode" ],
     }
     # Override defaults with user settings
     for key, value in configs:
@@ -61,15 +60,11 @@ class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
     self.config = config
     markdown.inlinepatterns.Pattern.__init__(self, pattern)
 
-  def getCompiledRegExp(self):
-    import re
-    return re.compile(self.pattern)
-
   def handleMatch(self, match):
 
     if match :
 
-      pixel_size = 2
+      pixel_size = self.config['intPixelSize'][0]
       qrcodeSourceData = str(match.group(1))
       qrCodeObject = QRCode(pixel_size, QRErrorCorrectLevel.L)
       qrCodeObject.addData( qrcodeSourceData )
@@ -81,7 +76,7 @@ class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
       qrCodeImage_File = StringIO.StringIO()
       qrCodeImage.save( qrCodeImage_File , format= 'PNG')
 
-      element = markdown.etree.Element('img')
+      element = markdown.util.etree.Element('img')
       element.set("src", "data:image/png;base64,%s" % b64encode( qrCodeImage_File.getvalue()) )
       element.set("title", "qrcode for : %s " % qrcodeSourceData )
 
