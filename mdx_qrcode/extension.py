@@ -33,6 +33,9 @@ class QrCodeExtension(markdown.Extension):
     # Set extension defaults
     self.config = {
       "intPixelSize"  : [  2, "Pixel Size of each dark and light bit" ],
+      "useDomainSyntax" : [ True, "Use the alternative \"domain\" style syntax (:qr:`data`)"],
+      "bgColor" : [ "#FFFFFF", "The color to use for background (\"light colored\") squares."],
+      "fgColor" : [ "#000000", "The color to use for foreground (\"dark colored\") squares."],
     }
     # Override defaults with user settings
     for key, value in configs:
@@ -52,7 +55,10 @@ class QrCodeExtension(markdown.Extension):
     md.inlinePatterns.add(name, objPattern, "<reference")
 
   def extendMarkdown(self, md, md_globals):
-    self.add_inline( md, "qrcode", BasicQrCodePattern, r'\[\-\[(.*)\]\-\]')
+    if self.config['useDomainSyntax']:
+        self.add_inline( md, "qrcode", BasicQrCodePattern, r':(?:qr|QR):(?P<pix>[0-9]+:)?(?:(?:fg|FG)=(?P<fg>[^:]*):)?(?:(?:bg|BG)=(?P<bg>[^:]*):)?\[(?P<data>.*)\]')
+    else:
+        self.add_inline( md, "qrcode", BasicQrCodePattern, r'\[\-\[(?P<data>.*)\]\-\]')
 
 class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
   def __init__(self, pattern, config):
@@ -64,14 +70,35 @@ class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
 
     if match :
 
+      captures = match.groupdict()
+      print captures
+
       pixel_size = self.config['intPixelSize'][0]
-      qrcodeSourceData = str(match.group(1))
+      fg_col = self.config['fgColor'][0]
+      bg_col = self.config['bgColor'][0]
+
+      if "pix" in captures:
+        pix = captures["pix"]
+        if pix is not None:
+            pixel_size = int(captures["pix"][:-1])
+      if "fg" in captures:
+        fg = captures["fg"]
+        if fg is not None:
+            fg_col = fg
+      if "bg" in captures:
+        bg = captures["bg"]
+        if bg is not None:
+            bg_col = bg
+
+      qrcodeSourceData = str(captures["data"])
+
       qrCodeObject = QRCode(pixel_size, QRErrorCorrectLevel.L)
       qrCodeObject.addData( qrcodeSourceData )
       qrCodeObject.make()
       qrCodeImage = qrCodeObject.makeImage(
         pixel_size = pixel_size,
-        dark_colour = "#000000"
+        dark_colour = fg_col,
+        light_colour = bg_col,
       )
       qrCodeImage_File = StringIO.StringIO()
       qrCodeImage.save( qrCodeImage_File , format= 'PNG')
