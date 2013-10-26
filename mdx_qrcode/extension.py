@@ -10,7 +10,58 @@ QRcode markdown filter
 
 ## Format
 
-[-[strDataToEncode]-]
+### Traditional Syntax
+
+This is the "traditional" short syntax:
+
+    [-[str data to encode]-]
+
+It renders like this:
+
+[-[str data to encode]-]
+
+
+### Domain Syntax
+
+A second, more verbose but more general and powerful syntax, is called the "domain"
+syntax. It looks like this:
+
+    :qr:4:bg=#FF0000:fg=#0000FF:ec=Q:[Encode this as well.]
+
+Which renders as
+
+:qr:4:bg=#FF0000:fg=#0000FF:ec=Q:[Encode this as well.]
+
+The domain syntax has the general form:
+
+    :qr:<OPTS>:[<DATA>]
+
+Where OPTS can be used to specify the pixel-size, the foreground and background size,
+and the QR Error Correcting Level to use (L, M, H, or Q). (Note that the foreground
+color doesn't work real well). All OPTS are optional.
+
+## Config Options
+
+intPixelSize
+: Pixel Size of each dark and light bit. _Default is 2_
+
+useShortSyntax
+: Enable the use of the original short syntax. _Default is True_
+
+bgColor
+: The color to use for background ("light colored") bits. _Default is #FFFFFF (white)_
+
+fgColor
+: The color to use for foreground ("dark colored") bits. _Default is #000000 (black)_
+
+ecLevel
+: The error correcting level to use. One of L, M, H, or Q. _Default is L_
+
+
+## Notes
+
+You can try including square brackets in DATA by escaping them with front slashes,
+but markdown seems to be replacing them with some strange escape code.
 
 """
 
@@ -32,14 +83,20 @@ class QrCodeExtension(markdown.Extension):
     """
     # Set extension defaults
     self.config = {
-      "intPixelSize"  : [  2, "Pixel Size of each dark and light bit" ],
-      "useDomainSyntax" : [ True, "Use the alternative \"domain\" style syntax (:qr:`data`)"],
+      "intPixelSize"  : [  "2", "Pixel Size of each dark and light bit" ],
+      "useShortSyntax" : [ "true", "Enable the use of the original short syntax ( '[-[data to encode]-]' )"],
       "bgColor" : [ "#FFFFFF", "The color to use for background (\"light colored\") squares."],
       "fgColor" : [ "#000000", "The color to use for foreground (\"dark colored\") squares."],
+      "ecLevel" : ["L", "The error correcting level to use. One of L, M, H, or Q."],
     }
     # Override defaults with user settings
     for key, value in configs:
       self.setConfig(key, value)
+
+
+    self.config["intPixelSize"][0] = int(self.config["intPixelSize"][0])
+    self.config["useShortSyntax"][0] = (self.config["useShortSyntax"][0]).lower() in ("true", "yes", "t", "y", "1")
+
 
   def add_inline(self, md, name, pattern_class, pattern):
     """
@@ -55,9 +112,8 @@ class QrCodeExtension(markdown.Extension):
     md.inlinePatterns.add(name, objPattern, "<reference")
 
   def extendMarkdown(self, md, md_globals):
-    if self.config['useDomainSyntax']:
-        self.add_inline( md, "qrcode", BasicQrCodePattern, r':(?:qr|QR):(?P<pix>[0-9]+:)?(?:(?:fg|FG)=(?P<fg>[^:]*):)?(?:(?:bg|BG)=(?P<bg>[^:]*):)?\[(?P<data>.*)\]')
-    else:
+    self.add_inline( md, "qrcode-domain", BasicQrCodePattern, r':(?:qr|QR):(?P<args>[^\[\]]+:)?\[(?P<data>.*)\]')
+    if self.config['useShortSyntax'][0]:
         self.add_inline( md, "qrcode", BasicQrCodePattern, r'\[\-\[(?P<data>.*)\]\-\]')
 
 class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
@@ -71,28 +127,43 @@ class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
     if match :
 
       captures = match.groupdict()
-      print captures
 
       pixel_size = self.config['intPixelSize'][0]
       fg_col = self.config['fgColor'][0]
       bg_col = self.config['bgColor'][0]
+      ec_level = self.config['ecLevel'][0]
 
-      if "pix" in captures:
-        pix = captures["pix"]
-        if pix is not None:
-            pixel_size = int(captures["pix"][:-1])
-      if "fg" in captures:
-        fg = captures["fg"]
-        if fg is not None:
-            fg_col = fg
-      if "bg" in captures:
-        bg = captures["bg"]
-        if bg is not None:
-            bg_col = bg
+      if "args" in captures:
+        args = captures["args"]
+        if args is not None:
+            args = args[:-1].split(":")
+            for arg in args:
+                c = arg.split("=", 1)
+                if len(c) == 1:
+                    pixel_size = int(c[0])
+                else:
+                    k, v = c
+                    if k.lower() == "fg":
+                        fg_col = v
+                    elif k.lower() == "bg":
+                        bg_col = v
+                    elif k.lower() == "ec":
+                        ec_level = v
+
+      if ec_level == 'L':
+        ec_level = QRErrorCorrectLevel.L
+      elif ec_level == 'M':
+        ec_level = QRErrorCorrectLevel.M
+      elif ec_level == 'H':
+        ec_level = QRErrorCorrectLevel.H
+      elif ec_level == 'Q':
+        ec_level = QRErrorCorrectLevel.Q
+      else:
+        ec_level = QRErrorCorrectLevel.L
 
       qrcodeSourceData = str(captures["data"])
 
-      qrCodeObject = QRCode(pixel_size, QRErrorCorrectLevel.L)
+      qrCodeObject = QRCode(pixel_size, ec_level)
       qrCodeObject.addData( qrcodeSourceData )
       qrCodeObject.make()
       qrCodeImage = qrCodeObject.makeImage(
@@ -118,8 +189,8 @@ def makeExtension(configs=None):
 
 if __name__ == "__main__":
     import doctest
-    print doctest.testmod()
-    print "-" * 8
-    md = markdown.Markdown(extensions=['qrcode'])
+    #print doctest.testmod()
+    #print "-" * 8
+    md = markdown.Markdown(extensions=['qrcode', 'def_list'])
     print md.convert( __doc__ )
 
