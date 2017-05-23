@@ -68,6 +68,7 @@ but markdown seems to be replacing them with some strange escape code.
 
 import markdown
 import StringIO
+import types
 from QrCodeLib import *
 from markdown.util import etree
 from base64 import b64encode
@@ -90,12 +91,14 @@ class QrCodeExtension(markdown.Extension):
       "ecLevel" : ["L", "The error correcting level to use. One of L, M, H, or Q."],
     }
     # Override defaults with user settings
-    for key, value in configs:
-      self.setConfig(key, value)
-
+    if configs:
+      for key, value in configs.items():
+        self.setConfig(key, value)
 
     self.config["intPixelSize"][0] = int(self.config["intPixelSize"][0])
-    self.config["useShortSyntax"][0] = (self.config["useShortSyntax"][0]).lower() in ("true", "yes", "t", "y", "1")
+
+    if type(self.config["useShortSyntax"][0]) == types.StringType:
+        self.config["useShortSyntax"][0] = (self.config["useShortSyntax"][0]).lower() in ("true", "yes", "t", "y", "1")
 
 
   def add_inline(self, md, name, pattern_class, pattern):
@@ -177,6 +180,7 @@ class BasicQrCodePattern(markdown.inlinepatterns.Pattern):
       element = markdown.util.etree.Element('img')
       element.set("src", "data:image/png;base64,%s" % b64encode( qrCodeImage_File.getvalue()) )
       element.set("title", "qrcode for : %s " % qrcodeSourceData )
+      element.set("class", "qrcode")
 
       qrCodeImage_File.close()
 
